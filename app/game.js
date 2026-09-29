@@ -125,9 +125,10 @@
   }
 
   function saveHighScore(newScore) {
+    highScore = parseInt(newScore, 10) || 0;
     try {
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
+        localStorage.setItem(HIGH_SCORE_KEY, highScore.toString());
       }
     } catch (e) {
       // Ignore storage errors
@@ -176,6 +177,11 @@
   function triggerGameOver() {
     gameState = 'GAMEOVER';
     playSound('hit');
+
+    const storedHighScore = getStoredHighScore();
+    if (storedHighScore > highScore) {
+      highScore = storedHighScore;
+    }
 
     let isNewRecord = false;
     if (score > highScore) {
