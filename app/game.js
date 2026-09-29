@@ -148,6 +148,7 @@
     pipes = [];
     score = 0;
     frameCount = 0;
+    highScore = getStoredHighScore();
     updateHUD();
   }
 
