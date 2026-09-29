@@ -1,172 +1,137 @@
-pipeline {
-    agent any
+node {
+    def APP_NAME           = 'flappy-bird'
+    def IMAGE_TAG          = 'jenkins-build'
+    
+    // Feature flags for downstream cloud deployment stages (Default: false for current local validation phase)
+    def ENABLE_DOCKER_PUSH  = false
+    def ENABLE_TERRAFORM    = false
+    def ENABLE_ANSIBLE      = false
+    def ENABLE_KUBERNETES   = false
 
-    environment {
-        APP_NAME           = 'flappy-bird'
-        IMAGE_TAG          = 'jenkins-build'
-        
-        // Feature flags for downstream cloud deployment stages (Default: false for current local validation phase)
-        ENABLE_DOCKER_PUSH  = 'false'
-        ENABLE_TERRAFORM    = 'false'
-        ENABLE_ANSIBLE      = 'false'
-        ENABLE_KUBERNETES   = 'false'
-    }
+    try {
+        timeout(time: 1, unit: 'HOURS') {
 
-    options {
-        timeout(time: 1, unit: 'HOURS')
-        disableConcurrentBuilds()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-    }
-
-    stages {
-        stage('Stage 1 — Checkout') {
-            steps {
+            stage('Stage 1 — Checkout') {
                 echo "===> Checking out source code from Git..."
                 checkout scm
             }
-        }
 
-        stage('Stage 2 — Project Validation') {
-            steps {
+            stage('Stage 2 — Project Validation') {
                 echo "===> Validating required project configuration files..."
-                script {
-                    def requiredFiles = [
-                        'app/index.html',
-                        'app/style.css',
-                        'app/game.js',
-                        'docker/Dockerfile',
-                        'docker/nginx.conf',
-                        'k8s/deployment.yaml',
-                        'tests/package.json',
-                        'tests/game.test.js'
-                    ]
-                    for (file in requiredFiles) {
-                        if (!fileExists(file)) {
-                            error("CRITICAL: Required project file missing: ${file}")
-                        } else {
-                            echo "✅ Verified: ${file}"
-                        }
+                def requiredFiles = [
+                    'app/index.html',
+                    'app/style.css',
+                    'app/game.js',
+                    'docker/Dockerfile',
+                    'docker/nginx.conf',
+                    'k8s/deployment.yaml',
+                    'tests/package.json',
+                    'tests/game.test.js'
+                ]
+                for (file in requiredFiles) {
+                    if (!fileExists(file)) {
+                        error("CRITICAL: Required project file missing: ${file}")
+                    } else {
+                        echo "✅ Verified: ${file}"
                     }
                 }
             }
-        }
 
-        stage('Stage 3 — Automated Tests') {
-            steps {
+            stage('Stage 3 — Automated Tests') {
                 echo "===> Running automated JavaScript unit tests..."
                 dir('tests') {
-                    script {
-                        if (isUnix()) {
-                            sh 'npm install'
-                            sh 'npm test'
-                        } else {
-                            bat '''
-                                @echo off
-                                where npm >nul 2>&1
-                                if %errorlevel% equ 0 (
-                                    npm install && npm test
-                                ) else if exist "C:\\Program Files\\nodejs\\npm.cmd" (
-                                    set "PATH=C:\\Program Files\\nodejs;%PATH%"
-                                    npm install && npm test
-                                ) else (
-                                    echo CRITICAL: npm/node is not found in PATH or standard Node.js path.
-                                    echo Please install Node.js from https://nodejs.org/ or configure the NodeJS Jenkins plugin.
-                                    exit /b 1
-                                )
-                            '''
-                        }
+                    if (isUnix()) {
+                        sh 'npm install && npm test'
+                    } else {
+                        bat '''
+                            @echo off
+                            where npm >nul 2>&1
+                            if %errorlevel% equ 0 (
+                                npm install && npm test
+                            ) else if exist "C:\\Program Files\\nodejs\\npm.cmd" (
+                                set "PATH=C:\\Program Files\\nodejs;%PATH%"
+                                npm install && npm test
+                            ) else (
+                                echo CRITICAL: npm/node is not found in PATH or standard Node.js path.
+                                echo Please install Node.js from https://nodejs.org/ or configure the NodeJS Jenkins plugin.
+                                exit /b 1
+                            )
+                        '''
                     }
                 }
             }
-        }
 
-        stage('Stage 4 — Docker Build') {
-            steps {
+            stage('Stage 4 — Docker Build') {
                 echo "===> Building Docker image: ${APP_NAME}:${IMAGE_TAG}"
-                script {
-                    if (isUnix()) {
-                        sh "docker build -f docker/Dockerfile -t ${APP_NAME}:${IMAGE_TAG} -t ${APP_NAME}:latest ."
-                    } else {
-                        bat '''
-                            @echo off
-                            where docker >nul 2>&1
-                            if %errorlevel% equ 0 (
-                                docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
-                            ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
-                                set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
-                                docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
-                            ) else (
-                                echo CRITICAL: Docker CLI is not found in PATH or standard Docker Desktop path.
-                                exit /b 1
-                            )
-                        '''
-                    }
+                if (isUnix()) {
+                    sh "docker build -f docker/Dockerfile -t ${APP_NAME}:${IMAGE_TAG} -t ${APP_NAME}:latest ."
+                } else {
+                    bat '''
+                        @echo off
+                        where docker >nul 2>&1
+                        if %errorlevel% equ 0 (
+                            docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
+                        ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
+                            set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
+                            docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
+                        ) else (
+                            echo CRITICAL: Docker CLI is not found in PATH or standard Docker Desktop path.
+                            exit /b 1
+                        )
+                    '''
                 }
             }
-        }
 
-        stage('Stage 5 — Image Verification') {
-            steps {
+            stage('Stage 5 — Image Verification') {
                 echo "===> Verifying built Docker image metadata..."
-                script {
-                    if (isUnix()) {
-                        sh "docker image inspect ${APP_NAME}:${IMAGE_TAG}"
-                    } else {
-                        bat '''
-                            @echo off
-                            where docker >nul 2>&1
-                            if %errorlevel% equ 0 (
-                                docker image inspect %APP_NAME%:%IMAGE_TAG%
-                            ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
-                                set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
-                                docker image inspect %APP_NAME%:%IMAGE_TAG%
-                            ) else (
-                                echo CRITICAL: Docker CLI not found.
-                                exit /b 1
-                            )
-                        '''
-                    }
+                if (isUnix()) {
+                    sh "docker image inspect ${APP_NAME}:${IMAGE_TAG}"
+                } else {
+                    bat '''
+                        @echo off
+                        where docker >nul 2>&1
+                        if %errorlevel% equ 0 (
+                            docker image inspect %APP_NAME%:%IMAGE_TAG%
+                        ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
+                            set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
+                            docker image inspect %APP_NAME%:%IMAGE_TAG%
+                        ) else (
+                            echo CRITICAL: Docker CLI not found.
+                            exit /b 1
+                        )
+                    '''
                 }
             }
-        }
 
-        stage('Stage 6 — Security Scan') {
-            steps {
+            stage('Stage 6 — Security Scan') {
                 echo "===> Checking for Trivy container security scanner..."
-                script {
-                    if (isUnix()) {
-                        sh '''
-                            if command -v trivy >/dev/null 2>&1; then
-                                trivy image --severity HIGH,CRITICAL ${APP_NAME}:${IMAGE_TAG}
-                            else
-                                echo "WARNING: Trivy scanner not installed on Linux agent. Skipping security scan stage."
-                            fi
-                        '''
-                    } else {
-                        bat '''
-                            @echo off
-                            where trivy >nul 2>&1
-                            if %errorlevel% equ 0 (
-                                trivy image --severity HIGH,CRITICAL %APP_NAME%:%IMAGE_TAG%
-                            ) else (
-                                echo WARNING: Trivy security scanner is not installed on Windows host.
-                                echo Install via Chocolatey: choco install trivy OR Winget: winget install AquaSecurity.Trivy
-                                echo Skipping Trivy security scan stage for current local validation build.
-                            )
-                        '''
-                    }
+                if (isUnix()) {
+                    sh '''
+                        if command -v trivy >/dev/null 2>&1; then
+                            trivy image --severity HIGH,CRITICAL ${APP_NAME}:${IMAGE_TAG}
+                        else
+                            echo "WARNING: Trivy scanner not installed on Linux agent. Skipping security scan stage."
+                        fi
+                    '''
+                } else {
+                    bat '''
+                        @echo off
+                        where trivy >nul 2>&1
+                        if %errorlevel% equ 0 (
+                            trivy image --severity HIGH,CRITICAL %APP_NAME%:%IMAGE_TAG%
+                        ) else (
+                            echo WARNING: Trivy security scanner is not installed on Windows host.
+                            echo Install via Chocolatey: choco install trivy OR Winget: winget install AquaSecurity.Trivy
+                            echo Skipping Trivy security scan stage for current local validation build.
+                        )
+                    '''
                 }
             }
-        }
 
-        stage('Stage 7 — Docker Hub Push (Gated)') {
-            when {
-                expression { return env.ENABLE_DOCKER_PUSH == 'true' }
-            }
-            steps {
-                echo "===> Authenticating and pushing image to Docker Hub..."
-                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    script {
+            if (ENABLE_DOCKER_PUSH) {
+                stage('Stage 7 — Docker Hub Push') {
+                    echo "===> Authenticating and pushing image to Docker Hub..."
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         if (isUnix()) {
                             sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
                             sh "docker tag ${APP_NAME}:${IMAGE_TAG} $DOCKER_USER/${APP_NAME}:${IMAGE_TAG}"
@@ -179,42 +144,24 @@ pipeline {
                     }
                 }
             }
-        }
 
-        stage('Stage 8 — Terraform Provisioning (Gated)') {
-            when {
-                expression { return env.ENABLE_TERRAFORM == 'true' }
-            }
-            steps {
-                echo "===> Initializing and validating Terraform infrastructure..."
-                dir('terraform') {
-                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                        script {
+            if (ENABLE_TERRAFORM) {
+                stage('Stage 8 — Terraform Provisioning') {
+                    dir('terraform') {
+                        withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                             if (isUnix()) {
-                                sh 'terraform init'
-                                sh 'terraform validate'
-                                sh 'terraform plan -out=tfplan'
-                                sh 'terraform apply -auto-approve tfplan'
+                                sh 'terraform init && terraform validate && terraform plan -out=tfplan && terraform apply -auto-approve tfplan'
                             } else {
-                                bat 'terraform init'
-                                bat 'terraform validate'
-                                bat 'terraform plan -out=tfplan'
-                                bat 'terraform apply -auto-approve tfplan'
+                                bat 'terraform init && terraform validate && terraform plan -out=tfplan && terraform apply -auto-approve tfplan'
                             }
                         }
                     }
                 }
             }
-        }
 
-        stage('Stage 9 — Ansible Server Setup (Gated)') {
-            when {
-                expression { return env.ENABLE_ANSIBLE == 'true' }
-            }
-            steps {
-                echo "===> Executing Ansible playbooks..."
-                dir('ansible') {
-                    script {
+            if (ENABLE_ANSIBLE) {
+                stage('Stage 9 — Ansible Server Setup') {
+                    dir('ansible') {
                         if (isUnix()) {
                             sh 'ansible-playbook -i inventory/hosts.ini playbooks/setup.yml --syntax-check'
                         } else {
@@ -223,16 +170,10 @@ pipeline {
                     }
                 }
             }
-        }
 
-        stage('Stage 10 — Kubernetes Deployment (Gated)') {
-            when {
-                expression { return env.ENABLE_KUBERNETES == 'true' }
-            }
-            steps {
-                echo "===> Applying Kubernetes manifests..."
-                withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG_PATH')]) {
-                    script {
+            if (ENABLE_KUBERNETES) {
+                stage('Stage 10 — Kubernetes Deployment') {
+                    withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG_PATH')]) {
                         if (isUnix()) {
                             sh '''
                                 export KUBECONFIG=${KUBECONFIG_PATH}
@@ -260,17 +201,11 @@ pipeline {
                 }
             }
         }
-    }
-
-    post {
-        always {
-            echo "===> Pipeline execution completed."
-        }
-        success {
-            echo "✅ Jenkins Pipeline executed successfully!"
-        }
-        failure {
-            echo "❌ Jenkins Pipeline execution failed. Please check build logs above."
-        }
+        echo "✅ Jenkins Pipeline executed successfully!"
+    } catch (err) {
+        echo "❌ Jenkins Pipeline execution failed: ${err.message}"
+        throw err
+    } finally {
+        echo "===> Pipeline execution completed."
     }
 }
