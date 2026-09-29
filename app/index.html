@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Flappy Bird Arcade Clone - HTML5 Canvas Arcade Game with LocalStorage High Scores">
+  <meta name="author" content="DevOps CI/CD Team">
+  <title>Flappy Bird Arcade Clone — DevOps Edition</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="game-container" id="gameContainer">
+    <!-- Header HUD -->
+    <header class="hud-bar">
+      <div class="hud-pill">
+        <span class="hud-label">SCORE</span>
+        <span class="hud-value" id="currentScore">0</span>
+      </div>
+      <div class="hud-title">FLAPPY BIRD</div>
+      <div class="hud-pill highlight">
+        <span class="hud-label">BEST</span>
+        <span class="hud-value" id="highScore">0</span>
+      </div>
+    </header>
+
+    <!-- HTML5 Canvas -->
+    <div class="canvas-wrapper">
+      <canvas id="gameCanvas" width="400" height="600"></canvas>
+      
+      <!-- Start Overlay Screen -->
+      <div class="overlay-screen active" id="startScreen">
+        <div class="glass-card">
+          <div class="bird-preview">🐤</div>
+          <h1 class="game-heading">FLAPPY BIRD</h1>
+          <p class="game-subheading">DevOps CI/CD Production Edition</p>
+          <div class="controls-hint">
+            <span>Press <kbd>Space</kbd> or <kbd>Click</kbd> / <kbd>Tap</kbd> to Flap</span>
+          </div>
+          <button class="btn btn-primary" id="startBtn">START GAME</button>
+        </div>
+      </div>
+
+      <!-- Game Over Overlay Screen -->
+      <div class="overlay-screen hidden" id="gameOverScreen">
+        <div class="glass-card">
+          <h2 class="game-over-title">GAME OVER</h2>
+          <div class="score-summary">
+            <div class="summary-item">
+              <span class="summary-label">Final Score</span>
+              <span class="summary-value" id="finalScore">0</span>
+            </div>
+            <div class="summary-item highlight-box">
+              <span class="summary-label">High Score</span>
+              <span class="summary-value" id="finalHighScore">0</span>
+            </div>
+          </div>
+          <div class="new-record-badge hidden" id="newRecordBadge">🏆 NEW HIGH SCORE! 🏆</div>
+          <button class="btn btn-restart" id="restartBtn">RESTART</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Meta -->
+    <footer class="game-footer">
+      <p>Deployed with Kubernetes & Ingress &bull; Environment: <span class="env-badge">Production</span></p>
+    </footer>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

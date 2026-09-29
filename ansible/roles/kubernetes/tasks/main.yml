@@ -1,0 +1,15 @@
+---
+- name: Download stable kubectl binary
+  get_url:
+    url: "https://dl.k8s.io/release/v1.28.2/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: '0755'
+
+- name: Verify kubectl binary execution
+  command: kubectl version --client
+  register: kubectl_client_version
+  changed_when: false
+
+- name: Display kubectl client version
+  debug:
+    msg: "{{ kubectl_client_version.stdout }}"

@@ -1,0 +1,24 @@
+# Git
+.git
+.gitignore
+
+# Node & Testing
+node_modules
+npm-debug.log
+coverage
+tests
+
+# Infrastructure & Automation
+terraform
+ansible
+jenkins
+scripts
+docs
+*.md
+
+# Local Environment & Secrets
+.env
+*.pem
+*.tfstate
+*.tfstate.backup
+.terraform

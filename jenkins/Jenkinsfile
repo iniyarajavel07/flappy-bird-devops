@@ -1,0 +1,183 @@
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME         = 'flappy-bird'
+        DOCKER_REGISTRY  = 'docker.io'
+        DOCKER_REPO      = 'your-dockerhub-username/flappy-bird' // Replace with your Docker Hub repo
+        DOCKER_CRED_ID   = 'docker-hub-credentials'
+        AWS_CRED_ID      = 'aws-credentials'
+        KUBECONFIG_CRED   = 'kubeconfig-credentials'
+        IMAGE_TAG        = "${env.BUILD_NUMBER}-${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'latest'}"
+        AWS_REGION       = 'us-east-1'
+    }
+
+    options {
+        timeout(time: 1, unit: 'HOURS')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Stage 1 — Checkout') {
+            steps {
+                echo "===> Checking out source code from Git..."
+                checkout scm
+            }
+        }
+
+        stage('Stage 2 — Validate') {
+            steps {
+                echo "===> Validating project configuration files..."
+                sh 'test -f app/index.html'
+                sh 'test -f app/game.js'
+                sh 'test -f docker/Dockerfile'
+                sh 'test -f k8s/deployment.yaml'
+            }
+        }
+
+        stage('Stage 3 — Test') {
+            steps {
+                echo "===> Running automated JavaScript tests..."
+                dir('tests') {
+                    sh 'npm install'
+                    sh 'npm test'
+                }
+            }
+        }
+
+        stage('Stage 4 — Docker Build') {
+            steps {
+                echo "===> Building Docker image: ${DOCKER_REPO}:${IMAGE_TAG}"
+                sh "docker build -f docker/Dockerfile -t ${DOCKER_REPO}:${IMAGE_TAG} -t ${DOCKER_REPO}:latest ."
+            }
+        }
+
+        stage('Stage 5 — Docker Image Scan') {
+            steps {
+                echo "===> Scanning Docker image for security vulnerabilities..."
+                // Basic Trivy vulnerability scan if installed, non-blocking fallback
+                sh '''
+                    if command -v trivy >/dev/null 2>&1; then
+                        trivy image --severity HIGH,CRITICAL ${DOCKER_REPO}:${IMAGE_TAG}
+                    else
+                        echo "Trivy scanner not installed on agent. Skipping scan stage."
+                    fi
+                '''
+            }
+        }
+
+        stage('Stage 6 — Push Image') {
+            steps {
+                echo "===> Authenticating and pushing image to Docker Hub..."
+                withCredentials([usernamePassword(credentialsId: "${DOCKER_CRED_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                    sh "docker push ${DOCKER_REPO}:${IMAGE_TAG}"
+                    sh "docker push ${DOCKER_REPO}:latest"
+                }
+            }
+        }
+
+        stage('Stage 7 — Terraform Init') {
+            steps {
+                echo "===> Initializing Terraform infrastructure module..."
+                dir('terraform') {
+                    withCredentials([usernamePassword(credentialsId: "${AWS_CRED_ID}", usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh 'terraform init'
+                    }
+                }
+            }
+        }
+
+        stage('Stage 8 — Terraform Validate') {
+            steps {
+                echo "===> Validating Terraform syntax and parameters..."
+                dir('terraform') {
+                    sh 'terraform validate'
+                }
+            }
+        }
+
+        stage('Stage 9 — Terraform Plan') {
+            steps {
+                echo "===> Generating Terraform execution plan..."
+                dir('terraform') {
+                    withCredentials([usernamePassword(credentialsId: "${AWS_CRED_ID}", usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh 'terraform plan -out=tfplan'
+                    }
+                }
+            }
+        }
+
+        stage('Stage 10 — Terraform Apply') {
+            steps {
+                echo "===> Applying Terraform plan to provision AWS Infrastructure..."
+                dir('terraform') {
+                    withCredentials([usernamePassword(credentialsId: "${AWS_CRED_ID}", usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh 'terraform apply -auto-approve tfplan'
+                    }
+                }
+            }
+        }
+
+        stage('Stage 11 — Ansible') {
+            steps {
+                echo "===> Running Ansible Playbooks for Server Configuration..."
+                dir('ansible') {
+                    sh 'ansible-playbook -i inventory/hosts.ini playbooks/setup.yml --syntax-check'
+                    // Uncomment below step when target servers are provisioned
+                    // sh 'ansible-playbook -i inventory/hosts.ini playbooks/setup.yml'
+                }
+            }
+        }
+
+        stage('Stage 12 — Kubernetes Deployment') {
+            steps {
+                echo "===> Deploying application manifests to Kubernetes..."
+                withCredentials([file(credentialsId: "${KUBECONFIG_CRED}", variable: 'KUBECONFIG_PATH')]) {
+                    sh '''
+                        export KUBECONFIG=${KUBECONFIG_PATH}
+                        kubectl apply -f k8s/namespace.yaml
+                        kubectl apply -f k8s/configmap.yaml
+                        
+                        # Dynamically substitute image tag in deployment
+                        sed "s|image: flappy-bird:latest|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s/deployment.yaml | kubectl apply -f -
+                        
+                        kubectl apply -f k8s/service.yaml
+                        kubectl apply -f k8s/ingress.yaml
+                        kubectl apply -f k8s/hpa.yaml
+                    '''
+                }
+            }
+        }
+
+        stage('Stage 13 — Verification') {
+            steps {
+                echo "===> Verifying Kubernetes rolling deployment health..."
+                withCredentials([file(credentialsId: "${KUBECONFIG_CRED}", variable: 'KUBECONFIG_PATH')]) {
+                    sh '''
+                        export KUBECONFIG=${KUBECONFIG_PATH}
+                        kubectl rollout status deployment/flappy-bird-deployment -n flappy-bird --timeout=120s
+                        kubectl get pods -n flappy-bird -o wide
+                        kubectl get svc -n flappy-bird
+                        kubectl get ingress -n flappy-bird
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "===> Cleaning up workspace temporary files..."
+            sh 'docker logout || true'
+            cleanWs(deleteDirs: true, notFailBuild: true)
+        }
+        success {
+            echo "✅ PIPELINE SUCCESSFUL: Flappy Bird version ${IMAGE_TAG} deployed successfully to production."
+        }
+        failure {
+            echo "❌ PIPELINE FAILED: Check stage logs for details."
+        }
+    }
+}

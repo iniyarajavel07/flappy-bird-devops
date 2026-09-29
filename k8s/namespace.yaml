@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flappy-bird
+  labels:
+    app.kubernetes.io/name: flappy-bird
+    app.kubernetes.io/part-of: arcade-devops-pipeline
+    environment: production

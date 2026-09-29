@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flappy-bird-config
+  namespace: flappy-bird
+  labels:
+    app: flappy-bird
+data:
+  APP_ENV: "production"
+  APP_TITLE: "Flappy Bird Arcade — DevOps Edition"
+  PORT: "80"
