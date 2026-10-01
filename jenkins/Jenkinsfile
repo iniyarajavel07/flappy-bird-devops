@@ -81,52 +81,56 @@ pipeline {
         }
 
         stage('Stage 4 — Docker Build') {
-            steps {
-                echo "===> Building Docker image: ${APP_NAME}:${IMAGE_TAG}"
-                script {
-                    if (isUnix()) {
-                        sh "docker build -f docker/Dockerfile -t ${APP_NAME}:${IMAGE_TAG} -t ${APP_NAME}:latest ."
-                    } else {
-                        bat '''
-                            @echo off
-                            where docker >nul 2>&1
-                            if %errorlevel% equ 0 (
-                                docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
-                            ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
-                                set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
-                                docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
-                            ) else (
-                                echo CRITICAL: Docker CLI is not found in PATH or standard Docker Desktop path.
-                                exit /b 1
-                            )
-                        '''
-                    }
-                }
+            echo "===> Building Docker image: ${APP_NAME}:${IMAGE_TAG}"
+            if (isUnix()) {
+                sh "docker build -f docker/Dockerfile -t ${APP_NAME}:${IMAGE_TAG} -t ${APP_NAME}:latest ."
+            } else {
+                bat '''
+                    @echo off
+                    where docker >nul 2>&1
+                    if %errorlevel% equ 0 (
+                        docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
+                    ) else if exist "%LOCALAPPDATA%\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" (
+                        set "PATH=%LOCALAPPDATA%\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
+                        docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
+                    ) else if exist "C:\\Users\\revat\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" (
+                        set "PATH=C:\\Users\\revat\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
+                        docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
+                    ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
+                        set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
+                        docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
+                    ) else (
+                        echo CRITICAL: Docker CLI is not found in PATH or standard Docker Desktop paths.
+                        exit /b 1
+                    )
+                '''
             }
         }
 
         stage('Stage 5 — Image Verification') {
-            steps {
-                echo "===> Verifying built Docker image metadata..."
-                script {
-                    if (isUnix()) {
-                        sh "docker image inspect ${APP_NAME}:${IMAGE_TAG}"
-                    } else {
-                        bat '''
-                            @echo off
-                            where docker >nul 2>&1
-                            if %errorlevel% equ 0 (
-                                docker image inspect %APP_NAME%:%IMAGE_TAG%
-                            ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
-                                set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
-                                docker image inspect %APP_NAME%:%IMAGE_TAG%
-                            ) else (
-                                echo CRITICAL: Docker CLI not found.
-                                exit /b 1
-                            )
-                        '''
-                    }
-                }
+            echo "===> Verifying built Docker image metadata..."
+            if (isUnix()) {
+                sh "docker image inspect ${APP_NAME}:${IMAGE_TAG}"
+            } else {
+                bat '''
+                    @echo off
+                    where docker >nul 2>&1
+                    if %errorlevel% equ 0 (
+                        docker image inspect %APP_NAME%:%IMAGE_TAG%
+                    ) else if exist "%LOCALAPPDATA%\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" (
+                        set "PATH=%LOCALAPPDATA%\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
+                        docker image inspect %APP_NAME%:%IMAGE_TAG%
+                    ) else if exist "C:\\Users\\revat\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" (
+                        set "PATH=C:\\Users\\revat\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
+                        docker image inspect %APP_NAME%:%IMAGE_TAG%
+                    ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
+                        set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
+                        docker image inspect %APP_NAME%:%IMAGE_TAG%
+                    ) else (
+                        echo CRITICAL: Docker CLI not found.
+                        exit /b 1
+                    )
+                '''
             }
         }
 

@@ -71,11 +71,17 @@ node {
                         where docker >nul 2>&1
                         if %errorlevel% equ 0 (
                             docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
+                        ) else if exist "%LOCALAPPDATA%\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" (
+                            set "PATH=%LOCALAPPDATA%\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
+                            docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
+                        ) else if exist "C:\\Users\\revat\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" (
+                            set "PATH=C:\\Users\\revat\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
+                            docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
                         ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
                             set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
                             docker build -f docker/Dockerfile -t %APP_NAME%:%IMAGE_TAG% -t %APP_NAME%:latest .
                         ) else (
-                            echo CRITICAL: Docker CLI is not found in PATH or standard Docker Desktop path.
+                            echo CRITICAL: Docker CLI is not found in PATH or standard Docker Desktop paths.
                             exit /b 1
                         )
                     '''
@@ -91,6 +97,12 @@ node {
                         @echo off
                         where docker >nul 2>&1
                         if %errorlevel% equ 0 (
+                            docker image inspect %APP_NAME%:%IMAGE_TAG%
+                        ) else if exist "%LOCALAPPDATA%\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" (
+                            set "PATH=%LOCALAPPDATA%\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
+                            docker image inspect %APP_NAME%:%IMAGE_TAG%
+                        ) else if exist "C:\\Users\\revat\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" (
+                            set "PATH=C:\\Users\\revat\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
                             docker image inspect %APP_NAME%:%IMAGE_TAG%
                         ) else if exist "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe" (
                             set "PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%"
